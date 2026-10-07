@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mynotes.mapper.TagMapper">
+
+    <insert id="link">
+        INSERT INTO entry_tag (entry_id, tag_id)
+        VALUES (#{entryId}, #{tagId})
+        ON CONFLICT DO NOTHING
+    </insert>
+
+    <select id="upsertByName" resultType="java.lang.Long">
+        INSERT INTO tag (name)
+        VALUES (#{name})
+        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        RETURNING id
+    </select>
+
+    <select id="findNamesByEntryId" resultType="java.lang.String">
+        SELECT t.name
+        FROM tag t
+                 JOIN entry_tag et ON et.tag_id = t.id
+        WHERE et.entry_id = #{entryId}
+        ORDER BY t.name
+    </select>
+
+    <delete id="deleteByEntryId">
+        DELETE FROM entry_tag WHERE entry_id = #{entryId}
+    </delete>
+
+</mapper>

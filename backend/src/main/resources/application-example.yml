@@ -1,0 +1,13 @@
+# 复制为 application-local.yml 后填入真实值；application-local.yml 不会进 git。
+spring:
+  datasource:
+    password: "把 mynotes 角色的密码填在这里"
+
+mynotes:
+  ai:
+    # M3 才用到。留空则问答自动降级为关键词检索 + 原文引用。
+    api-key: ""
+    base-url: ""
+    chat-model: ""
+    embedding-model: ""
+    embedding-dim: 1024

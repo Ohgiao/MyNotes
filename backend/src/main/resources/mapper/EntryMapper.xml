@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mynotes.mapper.EntryMapper">
+
+    <sql id="columns">
+        id, type, title, content_md, content_plain, parent_id, source_date,
+        review_status, mastery, next_review_at, review_count, last_reviewed_at,
+        pinned, created_at, updated_at, deleted_at
+    </sql>
+
+    <insert id="insert" parameterType="com.mynotes.entity.Entry"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO entry (type, title, content_md, content_plain, parent_id, source_date,
+                           review_status, mastery, next_review_at, pinned)
+        VALUES (#{type}, #{title}, #{contentMd}, #{contentPlain}, #{parentId}, #{sourceDate},
+                #{reviewStatus}, #{mastery}, #{nextReviewAt}, #{pinned})
+    </insert>
+
+    <select id="findById" resultType="com.mynotes.entity.Entry">
+        SELECT <include refid="columns"/>
+        FROM entry
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </select>
+
+    <update id="update" parameterType="com.mynotes.entity.Entry">
+        UPDATE entry
+        SET type          = #{type},
+            title         = #{title},
+            content_md    = #{contentMd},
+            content_plain = #{contentPlain},
+            parent_id     = #{parentId},
+            source_date   = #{sourceDate},
+            pinned        = #{pinned},
+            updated_at    = now()
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="softDelete">
+        UPDATE entry
+        SET deleted_at = now(), updated_at = now()
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="restore">
+        UPDATE entry
+        SET deleted_at = NULL, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <select id="findTimeline" resultType="com.mynotes.entity.Entry">
+        SELECT <include refid="columns"/>
+        FROM entry
+        WHERE deleted_at IS NULL
+        <if test="type != null and type != ''">
+            AND type = #{type}
+        </if>
+        <if test="date != null">
+            AND source_date &lt;= #{date}
+        </if>
+        <if test="cursorDate != null and cursorId != null">
+            AND (source_date &lt; #{cursorDate}
+                 OR (source_date = #{cursorDate} AND id &lt; #{cursorId}))
+        </if>
+        ORDER BY source_date DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!--
+      pattern 由 service 层转义 % _ \ 后再包通配符，PG 的默认转义符就是反斜杠，因此不需要 ESCAPE 子句。
+      ILIKE 对任意长度中文成立，包含单个汉字；trgm GIN 索引覆盖三字以上的查询。
+    -->
+    <select id="search" resultType="com.mynotes.entity.Entry">
+        SELECT <include refid="columns"/>
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND (content_plain ILIKE #{pattern} OR title ILIKE #{pattern})
+        <if test="type != null and type != ''">
+            AND type = #{type}
+        </if>
+        ORDER BY (title ILIKE #{pattern}) DESC, pinned DESC, source_date DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findAllNotes" resultType="com.mynotes.entity.Entry">
+        SELECT id, type, title, source_date, parent_id, review_status, mastery, next_review_at
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND type = 'note'
+        ORDER BY source_date, id
+    </select>
+
+    <select id="findDeleted" resultType="com.mynotes.entity.Entry">
+        SELECT <include refid="columns"/>
+        FROM entry
+        WHERE deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findDueForReview" resultType="com.mynotes.entity.Entry">
+        SELECT <include refid="columns"/>
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND type = 'note'
+          AND review_status = 'learning'
+          AND next_review_at IS NOT NULL
+          AND next_review_at &lt;= now()
+        ORDER BY next_review_at
+        LIMIT #{limit}
+    </select>
+
+    <select id="countDue" resultType="int">
+        SELECT count(*)
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND type = 'note'
+          AND review_status = 'learning'
+          AND next_review_at IS NOT NULL
+          AND next_review_at &lt;= now()
+    </select>
+
+    <update id="applyReviewResult">
+        UPDATE entry
+        SET mastery          = GREATEST(0, LEAST(5, mastery + #{delta})),
+            next_review_at   = now() + make_interval(days => #{days}::int),
+            review_count     = review_count + 1,
+            last_reviewed_at = now(),
+            review_status    = CASE
+                                   WHEN GREATEST(0, LEAST(5, mastery + #{delta})) >= 3 THEN 'mastered'
+                                   ELSE 'learning'
+                END,
+            updated_at       = now()
+        WHERE id = #{id}
+          AND type = 'note'
+          AND deleted_at IS NULL
+    </update>
+
+    <select id="countAncestorsMatching" resultType="int">
+        WITH RECURSIVE ancestors AS (
+            SELECT CAST(#{newParentId} AS bigint) AS id
+            UNION ALL
+            SELECT e.parent_id
+            FROM entry e
+                     JOIN ancestors a ON e.id = a.id
+            WHERE e.parent_id IS NOT NULL
+        )
+        SELECT count(*)
+        FROM ancestors
+        WHERE id = #{childId}
+    </select>
+
+    <select id="findPendingEmbeddings" resultType="com.mynotes.entity.Entry">
+        SELECT id, type, title, content_plain, source_date
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND (embedded_hash IS NULL OR embedded_hash &lt;&gt; md5(content_plain))
+        ORDER BY id
+        LIMIT #{limit}
+    </select>
+
+    <select id="countPendingEmbeddings" resultType="int">
+        SELECT count(*)
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND (embedded_hash IS NULL OR embedded_hash &lt;&gt; md5(content_plain))
+    </select>
+
+    <select id="countEmbedded" resultType="int">
+        SELECT count(*)
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND embedding IS NOT NULL
+    </select>
+
+    <update id="saveEmbedding">
+        UPDATE entry
+        SET embedding     = CAST(#{vector} AS vector),
+            embedded_hash = md5(content_plain)
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </update>
+
+    <!-- <=> 是余弦距离，score 取 1-距离 便于阅读；HNSW 按距离升序即相似度降序 -->
+    <select id="searchByVector" resultType="com.mynotes.entity.EntryHit">
+        SELECT id, type, title, content_plain, source_date,
+               1 - (embedding &lt;=> CAST(#{vector} AS vector)) AS score
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND embedding IS NOT NULL
+        ORDER BY embedding &lt;=> CAST(#{vector} AS vector)
+        LIMIT #{limit}
+    </select>
+
+    <select id="findByIds" resultType="com.mynotes.entity.Entry">
+        SELECT <include refid="columns"/>
+        FROM entry
+        WHERE deleted_at IS NULL
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+</mapper>

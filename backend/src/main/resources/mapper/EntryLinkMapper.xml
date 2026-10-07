@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mynotes.mapper.EntryLinkMapper">
+
+    <insert id="insert">
+        INSERT INTO entry_link (src_id, dst_id, link_type)
+        VALUES (#{srcId}, #{dstId}, #{linkType})
+        ON CONFLICT (src_id, dst_id, link_type) DO NOTHING
+    </insert>
+
+    <delete id="deleteByPair">
+        DELETE FROM entry_link
+        WHERE src_id = #{srcId}
+          AND dst_id = #{dstId}
+    </delete>
+
+    <select id="findOutgoing" resultType="com.mynotes.entity.Entry">
+        SELECT e.id, e.type, e.title, e.content_plain, e.source_date, e.pinned, e.updated_at
+        FROM entry_link l
+                 JOIN entry e ON e.id = l.dst_id
+        WHERE l.src_id = #{srcId}
+          AND e.deleted_at IS NULL
+        ORDER BY l.created_at DESC
+    </select>
+
+    <select id="findIncoming" resultType="com.mynotes.entity.Entry">
+        SELECT e.id, e.type, e.title, e.content_plain, e.source_date, e.pinned, e.updated_at
+        FROM entry_link l
+                 JOIN entry e ON e.id = l.src_id
+        WHERE l.dst_id = #{dstId}
+          AND e.deleted_at IS NULL
+        ORDER BY l.created_at DESC
+    </select>
+
+</mapper>

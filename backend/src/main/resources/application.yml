@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: mynotes
+  profiles:
+    active: local
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mynotes
+    username: mynotes
+    hikari:
+      maximum-pool-size: 8
+  flyway:
+    locations: classpath:db/migration
+    placeholders:
+      embedding_dim: ${MYNOTES_EMBEDDING_DIM:1024}
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.mynotes.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+server:
+  port: 8080
+
+mynotes:
+  ai:
+    api-key: ""
+    base-url: ""
+    chat-model: ""
+    embedding-model: ""
+    embedding-dim: 1024
