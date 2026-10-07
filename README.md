@@ -40,6 +40,32 @@ npm --prefix frontend run dev                   # 页面 :5173
 
 打开 http://localhost:5173 。Vite 把 `/api` 代理到 8080，所以开发期同源、不需要配 CORS。
 
+## 语音输入
+
+点输入框旁的麦克风按钮即可口述，用的是**浏览器自带的 Web Speech API**：不加后端接口、不上传音频文件、
+不需要任何 API key。五个位置都有：快速记录单行框、"写长一点"正文框、笔记详情页编辑框、搜索框、问答框。
+
+行为约定（刻意如此，不是没做全）：
+
+- **未定稿的字不进输入框**，只在按钮下方灰字预览；停顿后定稿才落框。这样你在听写过程中手动改字不会被打断或吞字。
+- 落框后**不会自动保存**，你确认无误再按回车。搜索框是整体替换（口述的就是要查的词），其余是追加到末尾。
+- 一次一句：Edge 静音一段时间会自动停，再点一下继续。不做连续口述。
+- 输入法组合期间到达的定稿会先排队，等你上屏后再按顺序写入，所以边打字边说不会丢字。
+
+前提与限制：
+
+| 项 | 说明 |
+|---|---|
+| 浏览器 | 需要 Edge 或 Chrome 系。不支持时按钮变灰并提示，不会隐藏 |
+| 地址 | **必须用 `http://localhost:5173` 或 HTTPS** 打开。用局域网 IP 访问会被浏览器直接拒掉麦克风权限 |
+| 网络 | Edge 的识别走微软云端服务，**需联网**，且音频与转写文本会外发给微软，不是纯本地处理 |
+| 标点 | 完全依赖云端加，中文句读质量不可控，不做补偿 |
+
+验证：`node scripts/test-dictation.mjs` 覆盖文本合并与状态机共 30 项纯逻辑断言（不碰麦克风）。
+真实听写只能在 Edge 里手测：点麦克风 → 允许权限 → 说一句 → 看文字落框 → 回车保存；
+再试故意不出声（应提示"没听到声音"）和 DevTools 切 offline（应提示需要联网）。
+Qoder 内置浏览器是 Electron/Chromium，其 Web Speech 依赖 Google 语音端点，**不能当作真实听写的验证手段**。
+
 ## HTTP 接口
 
 | 方法 路径 | 用途 |
@@ -97,6 +123,7 @@ node scripts/smoke-m3.mjs        # 16 项：写向量→余弦召回→RRF 融�
 node scripts/smoke.mjs      # M1 记录 / 搜索 / 软删（30 项）
 node scripts/smoke-m2.mjs   # M2 主题树 / 关联 / 标签 / 复习 / 回收站（26 项）
 node scripts/smoke-m3.mjs   # M3 问答（需按上一节指向假模型）
+node scripts/test-dictation.mjs  # 语音输入的文本合并与状态机（30 项，不需要麦克风）
 ```
 
 测试数据带 `m2-` / `m3-` 时间戳前缀，方便事后清掉。
@@ -127,9 +154,11 @@ backend/src/main/java/com/mynotes/
 backend/src/main/resources/
   mapper/*.xml  db/migration/*.sql  application*.yml
 frontend/src/
-  views/  components/  api/  router/
+  views/  components/  composables/  api/  router/
+  dictation/           # merge.ts / machine.ts：不依赖 vue 的纯逻辑，可被 Node 直接 import 测试
+  speech.d.ts          # Web Speech API 的最小类型声明（TS 的 lib.dom 里没有）
 scripts/
-  init-db.sql  smoke.mjs  smoke-m2.mjs  smoke-m3.mjs  fake-llm.mjs
+  init-db.sql  smoke.mjs  smoke-m2.mjs  smoke-m3.mjs  test-dictation.mjs  fake-llm.mjs
 ```
 
 ## 里程碑

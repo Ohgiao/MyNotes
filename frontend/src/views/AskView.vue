@@ -2,6 +2,8 @@
 import { nextTick, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { useDictation } from '@/composables/useDictation'
+import VoiceButton from '@/components/VoiceButton.vue'
 import type { AiStatus, AskResult } from '@/types'
 
 const inputRef = ref<HTMLTextAreaElement | null>(null)
@@ -11,6 +13,8 @@ const result = ref<AskResult | null>(null)
 const asking = ref(false)
 const indexing = ref(false)
 const error = ref('')
+
+const askDict = useDictation({ target: question, el: inputRef })
 
 const MATCHED_LABEL: Record<string, string> = {
   keyword: '关键词命中',
@@ -40,6 +44,7 @@ async function loadStatus() {
 async function ask() {
   const text = question.value.trim()
   if (!text || asking.value) return
+  askDict.cancel()
   asking.value = true
   error.value = ''
   try {
@@ -100,6 +105,9 @@ onMounted(() => {
       placeholder="比如：我之前怎么理解连接池大小的？回车提问，Shift+Enter 换行"
       @keydown="onKeydown"
     ></textarea>
+    <div class="ask-foot">
+      <VoiceButton :d="askDict" />
+    </div>
 
     <p v-if="error" class="error">{{ error }}</p>
 
@@ -142,6 +150,7 @@ onMounted(() => {
   resize: vertical;
 }
 .ask-input:focus { outline: none; border-color: #4a89dc; }
+.ask-foot { margin-top: 8px; }
 .error { color: #d0453e; font-size: 13px; }
 .answer {
   margin: 18px 0 0;

@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { useDictation } from '@/composables/useDictation'
+import VoiceButton from '@/components/VoiceButton.vue'
 import type { EntryDetail, SearchItem, TreeNode } from '@/types'
 
 const props = defineProps<{ id: string | string[] }>()
@@ -17,6 +19,9 @@ const draftBody = ref('')
 const draftTags = ref('')
 const draftParent = ref<number | null>(null)
 const saving = ref(false)
+const bodyRef = ref<HTMLTextAreaElement | null>(null)
+
+const bodyDict = useDictation({ target: draftBody, el: bodyRef })
 
 const noteOptions = ref<{ id: number; label: string }[]>([])
 const linkQuery = ref('')
@@ -54,6 +59,8 @@ async function load() {
 
 function resetDraft() {
   if (!entry.value) return
+  // 草稿要被服务端内容覆盖了，在途的听写结果不能留下来
+  bodyDict.cancel()
   draftTitle.value = entry.value.title
   draftBody.value = entry.value.contentMd
   draftTags.value = entry.value.tags.join(', ')
@@ -62,6 +69,7 @@ function resetDraft() {
 
 async function save() {
   if (!entry.value || saving.value || !draftBody.value.trim()) return
+  bodyDict.cancel()
   saving.value = true
   try {
     const tagNames = draftTags.value
@@ -184,7 +192,10 @@ onMounted(() => {
 
     <div v-else class="edit">
       <input v-model="draftTitle" class="field" placeholder="标题" />
-      <textarea v-model="draftBody" class="field area" rows="14"></textarea>
+      <div class="area-line">
+        <textarea ref="bodyRef" v-model="draftBody" class="field area" rows="14"></textarea>
+        <VoiceButton :d="bodyDict" />
+      </div>
       <input v-model="draftTags" class="field" placeholder="标签，逗号分隔" />
       <select v-if="isNote" v-model="draftParent" class="field">
         <option :value="null">不属于任何主题（根节点）</option>
@@ -254,6 +265,8 @@ onMounted(() => {
 .edit { display: flex; flex-direction: column; gap: 10px; }
 .field { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
 .area { resize: vertical; line-height: 1.7; }
+.area-line { display: flex; align-items: flex-start; gap: 8px; }
+.area-line .area { flex: 1; min-width: 0; }
 .actions, .foot { display: flex; gap: 10px; margin-top: 14px; }
 .primary, .plain, .danger { padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
 .primary { border: none; background: #4a89dc; color: #fff; }

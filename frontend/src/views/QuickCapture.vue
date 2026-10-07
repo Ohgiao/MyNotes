@@ -2,6 +2,8 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/api/client'
+import { useDictation } from '@/composables/useDictation'
+import VoiceButton from '@/components/VoiceButton.vue'
 import type { EntryType } from '@/types'
 
 const quickRef = ref<HTMLInputElement | null>(null)
@@ -13,6 +15,9 @@ const body = ref('')
 const saving = ref(false)
 const lastSavedId = ref<number | null>(null)
 const lastSavedTitle = ref('')
+
+const quickDict = useDictation({ target: quick, el: quickRef })
+const bodyDict = useDictation({ target: body })
 
 function focus() {
   nextTick(() => quickRef.value?.focus())
@@ -48,6 +53,8 @@ function onBodyKeydown(e: KeyboardEvent) {
 async function submitQuick() {
   const text = quick.value.trim()
   if (!text || saving.value) return
+  // 文本已经交给这次保存了，之后再说出的话不该被"清空输入框"顺手吞掉
+  quickDict.cancel()
   await save({ contentMd: text })
   quick.value = ''
   focus()
@@ -56,6 +63,7 @@ async function submitQuick() {
 async function submitExpanded() {
   const text = body.value.trim()
   if (!text || saving.value) return
+  bodyDict.cancel()
   await save({ title: title.value.trim() || undefined, contentMd: text })
   body.value = ''
   title.value = ''
@@ -102,30 +110,36 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onHotkey))
       <label><input type="radio" value="note" v-model="type" @change="focus" /> 某个知识点的理解</label>
     </div>
 
-    <input
-      ref="quickRef"
-      v-model="quick"
-      class="quick-input"
-      :placeholder="type === 'log' ? '记下今天学到的，回车即保存' : '写下这个知识点现在的理解，回车即保存'"
-      @keydown="onQuickKeydown"
-    />
+    <div class="capture-line">
+      <input
+        ref="quickRef"
+        v-model="quick"
+        class="quick-input"
+        :placeholder="type === 'log' ? '记下今天学到的，回车即保存' : '写下这个知识点现在的理解，回车即保存'"
+        @keydown="onQuickKeydown"
+      />
+      <VoiceButton :d="quickDict" />
+    </div>
 
     <div class="row">
       <button class="link-btn" @click="expanded = !expanded">
         {{ expanded ? '收起长文' : '写长一点' }}
       </button>
-      <span class="hint">回车保存 · Shift+Enter 换行 · Ctrl+Shift+Space 回到输入框</span>
+      <span class="hint">回车保存 · 点麦克风口述 · Ctrl+Shift+Space 回到输入框</span>
     </div>
 
     <div v-if="expanded" class="expanded">
       <input v-model="title" class="title-input" placeholder="标题（留空则取正文首行）" />
-      <textarea
-        v-model="body"
-        class="body-input"
-        rows="10"
-        placeholder="支持 Markdown，Ctrl+Enter 保存"
-        @keydown="onBodyKeydown"
-      ></textarea>
+      <div class="body-line">
+        <textarea
+          v-model="body"
+          class="body-input"
+          rows="10"
+          placeholder="支持 Markdown，Ctrl+Enter 保存"
+          @keydown="onBodyKeydown"
+        ></textarea>
+        <VoiceButton :d="bodyDict" />
+      </div>
       <button class="primary" :disabled="saving || !body.trim()" @click="submitExpanded">保存</button>
     </div>
 
@@ -149,6 +163,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onHotkey))
   background: #fff;
 }
 .quick-input:focus { outline: none; border-color: #4a89dc; }
+.capture-line { display: flex; align-items: center; gap: 8px; }
+.capture-line .quick-input { flex: 1; min-width: 0; }
+.body-line { display: flex; align-items: flex-start; gap: 8px; }
+.body-line .body-input { flex: 1; min-width: 0; }
 .row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
 .hint { font-size: 12px; color: var(--muted); }
 .link-btn {

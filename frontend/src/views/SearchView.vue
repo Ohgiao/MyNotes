@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
 import { api } from '@/api/client'
+import { useDictation } from '@/composables/useDictation'
+import VoiceButton from '@/components/VoiceButton.vue'
 import type { EntryType, SearchItem } from '@/types'
 
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -10,6 +12,9 @@ const results = ref<SearchItem[]>([])
 const searched = ref(false)
 const loading = ref(false)
 const error = ref('')
+
+// 搜索框用替换：整句口述就是这次要查的内容，追加反而查不到
+const qDict = useDictation({ target: q, el: inputRef, mode: 'replace' })
 
 function isImeComposing(e: KeyboardEvent) {
   return e.isComposing || e.keyCode === 229
@@ -45,6 +50,7 @@ onMounted(() => nextTick(() => inputRef.value?.focus()))
   <section>
     <div class="search-bar">
       <input ref="inputRef" v-model="q" class="search-input" placeholder="中文可以是单个字，比如 拼" @keydown="onKeydown" />
+      <VoiceButton :d="qDict" />
       <button class="primary" :disabled="loading" @click="run">搜索</button>
     </div>
     <div class="toolbar">
