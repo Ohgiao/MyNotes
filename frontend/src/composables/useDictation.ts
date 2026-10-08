@@ -32,7 +32,7 @@ export const STATE_HINT: Record<DictationState, string> = {
   unsupported: '当前浏览器不支持语音识别，请用 Edge 打开',
   idle: '开始听写',
   requesting: '等待麦克风授权…',
-  listening: '听写中，再点一下结束',
+  listening: '听写中，可以连续说，点一下结束',
   stopping: '收尾中…'
 }
 
@@ -134,7 +134,9 @@ export function useDictation(options: DictationOptions): Dictation {
 
     const instance = factory()
     instance.lang = lang
-    instance.continuous = false
+    // 必须是 true：continuous=false 时浏览器一发出定稿就立刻结束会话，
+    // 表现为"停一秒就得重新点"。静音多久算结束由浏览器决定，页面这边没有旋钮。
+    instance.continuous = true
     instance.interimResults = true
     instance.maxAlternatives = 1
     // 每个回调都先确认"还是当前这个识别器"：cancel/error 之后晚到的事件不能再改状态或写文本
